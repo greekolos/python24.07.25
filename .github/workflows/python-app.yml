@@ -1,23 +1,31 @@
 name: Python CI
 
 on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'Test run mode'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - path
+          - new
+          - changes
+          - new_or_changes
+      test_path:
+        description: 'Test file or folder path (only for mode=path)'
+        required: false
+        default: ''
+
   push:
     branches: [ master ]
   pull_request:
     branches: [ master ]
-  workflow_dispatch:
-    inputs:
-      test_path:
-        description: 'Path to test file or folder (leave empty to run all tests)'
-        required: false
-        default: ''
-      only_changed:
-        description: 'Run only changed test files? (true/false)'
-        required: false
-        default: 'false'
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,65 +36,97 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install system dependencies for Chrome
+    - name: Install Chrome (for headless browser tests)
       run: |
         sudo apt-get update
         sudo apt-get install -y wget gnupg2
         wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | sudo apt-key add -
-        sudo sh -c 'echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" >> /etc/apt/sources.list.d/google-chrome.list'
+        echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" | sudo tee /etc/apt/sources.list.d/google-chrome.list
         sudo apt-get update
         sudo apt-get install -y google-chrome-stable
 
-    - name: Install Python dependencies
+    - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Determine changed test files
-      id: changed-tests
+    - name: Collect changed/new test files
+      id: collect
+      shell: bash
       run: |
-        echo "🔍 Checking for changed test files..."
+        git fetch origin main
 
-        git fetch origin master
-        CHANGED=$(git diff --name-only --diff-filter=AMR origin/master...HEAD | grep '^test/.*\.py$' || true)
+        MODIFIED=$(git diff --name-only --diff-filter=M origin/main...HEAD | grep '^test/.*\.py$' || true)
+        NEW=$(git diff --name-only --diff-filter=A origin/main...HEAD | grep '^test/.*\.py$' || true)
+        COMBINED="$MODIFIED $NEW"
 
-        echo "📝 Changed test files:"
-        echo "$CHANGED"
-
-        echo "CHANGED_TESTS=$CHANGED" >> $GITHUB_OUTPUT
+        echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
+        echo "NEW_TESTS=$NEW" >> $GITHUB_OUTPUT
+        echo "COMBINED_TESTS=$COMBINED" >> $GITHUB_OUTPUT
 
     - name: Run tests
       shell: bash
       run: |
-        echo "Input path: ${{ github.event.inputs.test_path }}"
-        echo "Only changed: ${{ github.event.inputs.only_changed }}"
+        input_mode="${{ github.event.inputs.mode }}"
+        input_path="${{ github.event.inputs.test_path }}"
 
-        CHANGED="${{ steps.changed-tests.outputs.CHANGED_TESTS }}"
+        # Если пусто (push/PR), то mode по умолчанию
+        mode="${input_mode:-new_or_changes}"
+        path="${input_path:-}"
 
-        if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.only_changed }}" == "true" ]]; then
-          echo "📂 Running only changed test files (manual trigger)..."
-          if [ -z "$CHANGED" ]; then
-            echo "❌ No changed test files found."
-            exit 0
-          fi
-          echo "✅ Running: $CHANGED"
-          pytest $CHANGED
+        new_tests="${{ steps.collect.outputs.NEW_TESTS }}"
+        modified_tests="${{ steps.collect.outputs.MODIFIED_TESTS }}"
+        combined_tests="${{ steps.collect.outputs.COMBINED_TESTS }}"
 
-        elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.test_path }}" ]]; then
-          echo "🧪 Running tests in specified path: ${{ github.event.inputs.test_path }}"
-          pytest ${{ github.event.inputs.test_path }}
+        echo "▶ Selected mode: $mode"
+        echo "▶ Test path: $path"
 
-        elif [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "pull_request" ]]; then
-          echo "🔁 Running only changed test files (push or PR)..."
-          if [ -z "$CHANGED" ]; then
-            echo "❌ No changed test files found."
-            exit 0
-          fi
-          echo "✅ Running: $CHANGED"
-          pytest $CHANGED
+        case "$mode" in
+          all)
+            echo "▶ Running all tests..."
+            pytest
+            ;;
+          path)
+            if [ -z "$path" ]; then
+              echo "❌ Error: test_path is required when mode=path"
+              exit 1
+            fi
+            echo "▶ Running specific test: $path"
+            pytest "$path"
+            ;;
+          new)
+            if [ -z "$new_tests" ]; then
+              echo "⚠ No new test files found."
+              exit 0
+            fi
+            echo "▶ Running new test files:"
+            echo "$new_tests"
+            pytest $new_tests
+            ;;
+          changes)
+            if [ -z "$modified_tests" ]; then
+              echo "⚠ No modified test files found."
+              exit 0
+            fi
+            echo "▶ Running modified test files:"
+            echo "$modified_tests"
+            pytest $modified_tests
+            ;;
+          new_or_changes)
+            if [ -z "$combined_tests" ]; then
+              echo "⚠ No new or modified test files found."
+              exit 0
+            fi
+            echo "▶ Running all changed or new test files:"
+            echo "$combined_tests"
+            pytest $combined_tests
+            ;;
+          *)
+            echo "❌ Invalid mode: $mode"
+            exit 1
+            ;;
+        esac
 
-        else
-          echo "⚙️ Running all tests (fallback)"
-          pytest
-        fi
+
+
 
