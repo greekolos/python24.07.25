@@ -54,10 +54,10 @@ jobs:
       id: collect
       shell: bash
       run: |
-        git fetch origin main
+        git fetch origin master
 
-        MODIFIED=$(git diff --name-only --diff-filter=M origin/main...HEAD | grep '^test/.*\.py$' || true)
-        NEW=$(git diff --name-only --diff-filter=A origin/main...HEAD | grep '^test/.*\.py$' || true)
+        MODIFIED=$(git diff --name-only --diff-filter=M origin/master...HEAD | grep '^test/.*\.py$' || true)
+        NEW=$(git diff --name-only --diff-filter=A origin/master...HEAD | grep '^test/.*\.py$' || true)
         COMBINED="$MODIFIED $NEW"
 
         echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
@@ -70,7 +70,7 @@ jobs:
         input_mode="${{ github.event.inputs.mode }}"
         input_path="${{ github.event.inputs.test_path }}"
 
-        # Если пусто (push/PR), то mode по умолчанию
+        # Если push/PR — задаём режим по умолчанию
         mode="${input_mode:-new_or_changes}"
         path="${input_path:-}"
 
@@ -126,6 +126,7 @@ jobs:
             exit 1
             ;;
         esac
+
 
 
 
