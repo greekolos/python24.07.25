@@ -87,6 +87,9 @@ jobs:
 
         echo "▶ Mode: $mode"
         echo "▶ Path: $path"
+        echo "▶ New tests: '$new_tests'"
+        echo "▶ Modified tests: '$modified_tests'"
+        echo "▶ Combined tests: '$combined_tests'"
 
         case "$mode" in
           all)
@@ -102,7 +105,7 @@ jobs:
             pytest "$path"
             ;;
           new)
-            if [ -z "$new_tests" ]; then
+            if [ -z "$(echo $new_tests | xargs)" ]; then
               echo "⚠ No new test files found. Skipping tests."
               exit 0
             fi
@@ -111,7 +114,7 @@ jobs:
             pytest $new_tests
             ;;
           changes)
-            if [ -z "$modified_tests" ]; then
+            if [ -z "$(echo $modified_tests | xargs)" ]; then
               echo "⚠ No modified test files found. Skipping tests."
               exit 0
             fi
@@ -120,7 +123,7 @@ jobs:
             pytest $modified_tests
             ;;
           new_or_changes)
-            if [ -z "$combined_tests" ]; then
+            if [ -z "$(echo $combined_tests | xargs)" ]; then
               echo "⚠ No new or modified test files found. Skipping tests."
               exit 0
             fi
@@ -133,6 +136,7 @@ jobs:
             exit 1
             ;;
         esac
+
 
 
 
