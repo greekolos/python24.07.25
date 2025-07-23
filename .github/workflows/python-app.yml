@@ -31,7 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        fetch-depth: 0
+        fetch-depth: 0  # Нужно для корректного git diff
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
@@ -57,17 +57,18 @@ jobs:
       shell: bash
       run: |
         echo "🔁 Fetching origin/master..."
-        git fetch origin master || {
+        if ! git fetch origin master; then
           echo "⚠️ Failed to fetch origin/master. Skipping diff."
           echo "MODIFIED_TESTS=" >> $GITHUB_OUTPUT
           echo "NEW_TESTS=" >> $GITHUB_OUTPUT
           echo "COMBINED_TESTS=" >> $GITHUB_OUTPUT
           exit 0
-        }
+        fi
 
         MODIFIED=$(git diff --name-only --diff-filter=M origin/master...HEAD | grep '^test/.*\.py$' || true)
         NEW=$(git diff --name-only --diff-filter=A origin/master...HEAD | grep '^test/.*\.py$' || true)
-        COMBINED="$MODIFIED $NEW"
+        # Удаляем дубликаты и лишние пробелы
+        COMBINED=$(echo -e "$MODIFIED\n$NEW" | sort -u | xargs)
 
         echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
         echo "NEW_TESTS=$NEW" >> $GITHUB_OUTPUT
@@ -91,6 +92,18 @@ jobs:
         echo "▶ Modified tests: '$modified_tests'"
         echo "▶ Combined tests: '$combined_tests'"
 
+        # Функция для запуска pytest с обработкой путей
+        run_pytest() {
+          files="$1"
+          # Преобразуем строку в массив
+          read -r -a arr <<< "$files"
+          if [ ${#arr[@]} -eq 0 ]; then
+            echo "⚠ No test files to run. Skipping."
+            exit 0
+          fi
+          pytest "${arr[@]}"
+        }
+
         case "$mode" in
           all)
             echo "🧪 Running all tests..."
@@ -111,7 +124,7 @@ jobs:
             fi
             echo "🧪 Running new tests:"
             echo "$new_tests"
-            pytest $new_tests
+            run_pytest "$new_tests"
             ;;
           changes)
             if [ -z "$(echo $modified_tests | xargs)" ]; then
@@ -120,7 +133,7 @@ jobs:
             fi
             echo "🧪 Running changed tests:"
             echo "$modified_tests"
-            pytest $modified_tests
+            run_pytest "$modified_tests"
             ;;
           new_or_changes)
             if [ -z "$(echo $combined_tests | xargs)" ]; then
@@ -129,13 +142,14 @@ jobs:
             fi
             echo "🧪 Running new and changed tests:"
             echo "$combined_tests"
-            pytest $combined_tests
+            run_pytest "$combined_tests"
             ;;
           *)
             echo "❌ Invalid mode: $mode"
             exit 1
             ;;
         esac
+
 
 
 
