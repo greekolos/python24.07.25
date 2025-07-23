@@ -44,27 +44,48 @@ jobs:
 
     - name: Determine changed test files
       id: changed-tests
-      if: github.event_name != 'workflow_dispatch' || inputs.only_changed == 'true'
       run: |
-        echo "CHANGED_TESTS=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} | grep '^test/.*\.py$' || echo '')" >> $GITHUB_OUTPUT
+        echo "🔍 Checking for changed test files..."
+
+        # Получаем список изменённых тестов по сравнению с origin/master
+        CHANGED=$(git fetch origin master && git diff --name-only --diff-filter=AMR origin/master...HEAD | grep '^test/.*\.py$' || true)
+
+        echo "📝 Changed test files:"
+        echo "$CHANGED"
+
+        # Сохраняем в output
+        echo "CHANGED_TESTS=$CHANGED" >> $GITHUB_OUTPUT
 
     - name: Run tests
       run: |
-        echo "Input path: ${{ github.event.inputs.test_path }}"
-        echo "Only changed: ${{ github.event.inputs.only_changed }}"
-        
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.only_changed }}" = "true" ]; then
-          echo "Running only changed test files..."
-          if [ -z "${{ steps.changed-tests.outputs.CHANGED_TESTS }}" ]; then
-            echo "No changed test files found."
+        echo "Input path: ${{ github.event.inputs.test_path || '' }}"
+        echo "Only changed: ${{ github.event.inputs.only_changed || '' }}"
+
+        CHANGED="${{ steps.changed-tests.outputs.CHANGED_TESTS }}"
+
+        if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ github.event.inputs.only_changed }}" == "true" ]]; then
+          echo "📂 Running only changed test files (manual trigger)..."
+          if [ -z "$CHANGED" ]; then
+            echo "❌ No changed test files found."
             exit 0
           fi
-          pytest ${{ steps.changed-tests.outputs.CHANGED_TESTS }}
-        elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.test_path }}" ]; then
-          echo "Running tests in path: ${{ github.event.inputs.test_path }}"
+          echo "✅ Running: $CHANGED"
+          pytest $CHANGED
+
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ github.event.inputs.test_path }}" ]]; then
+          echo "🧪 Running tests in specified path: ${{ github.event.inputs.test_path }}"
           pytest ${{ github.event.inputs.test_path }}
+
+        elif [[ "${{ github.event_name }}" == "push" || "${{ github.event_name }}" == "pull_request" ]]; then
+          echo "🔁 Running only changed test files (push or PR)..."
+          if [ -z "$CHANGED" ]; then
+            echo "❌ No changed test files found."
+            exit 0
+          fi
+          echo "✅ Running: $CHANGED"
+          pytest $CHANGED
+
         else
-          echo "Running all tests"
+          echo "⚙️ Running all tests (fallback)"
           pytest
-        fi
 
