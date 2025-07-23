@@ -6,7 +6,7 @@ on:
       mode:
         description: 'Test run mode'
         required: true
-        default: 'all'
+        default: 'new_or_changes'
         type: choice
         options:
           - all
@@ -30,6 +30,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # 👈 Обязательно для корректной работы git diff
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
