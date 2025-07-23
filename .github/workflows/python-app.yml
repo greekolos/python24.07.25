@@ -31,7 +31,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
       with:
-        fetch-depth: 0  # обязательно для корректного diff
+        fetch-depth: 0
 
     - name: Set up Python 3.11
       uses: actions/setup-python@v4
@@ -68,10 +68,6 @@ jobs:
         MODIFIED=$(git diff --name-only --diff-filter=M origin/master...HEAD | grep '^test/.*\.py$' || true)
         NEW=$(git diff --name-only --diff-filter=A origin/master...HEAD | grep '^test/.*\.py$' || true)
         COMBINED="$MODIFIED $NEW"
-
-        echo "✅ MODIFIED_TESTS=$MODIFIED"
-        echo "✅ NEW_TESTS=$NEW"
-        echo "✅ COMBINED_TESTS=$COMBINED"
 
         echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
         echo "NEW_TESTS=$NEW" >> $GITHUB_OUTPUT
@@ -137,6 +133,7 @@ jobs:
             exit 1
             ;;
         esac
+
 
 
 
