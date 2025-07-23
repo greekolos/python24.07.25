@@ -36,7 +36,7 @@ jobs:
       with:
         python-version: '3.11'
 
-    - name: Install Chrome (for headless browser tests)
+    - name: Install Chrome
       run: |
         sudo apt-get update
         sudo apt-get install -y wget gnupg2
@@ -50,15 +50,26 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: Collect changed/new test files
+    - name: Detect changed and new test files
       id: collect
       shell: bash
       run: |
-        git fetch origin master
+        echo "🔁 Fetching origin/master..."
+        git fetch origin master || {
+          echo "⚠️ Failed to fetch origin/master. Skipping diff."
+          echo "MODIFIED_TESTS=" >> $GITHUB_OUTPUT
+          echo "NEW_TESTS=" >> $GITHUB_OUTPUT
+          echo "COMBINED_TESTS=" >> $GITHUB_OUTPUT
+          exit 0
+        }
 
         MODIFIED=$(git diff --name-only --diff-filter=M origin/master...HEAD | grep '^test/.*\.py$' || true)
         NEW=$(git diff --name-only --diff-filter=A origin/master...HEAD | grep '^test/.*\.py$' || true)
         COMBINED="$MODIFIED $NEW"
+
+        echo "✅ MODIFIED_TESTS=$MODIFIED"
+        echo "✅ NEW_TESTS=$NEW"
+        echo "✅ COMBINED_TESTS=$COMBINED"
 
         echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
         echo "NEW_TESTS=$NEW" >> $GITHUB_OUTPUT
@@ -69,8 +80,6 @@ jobs:
       run: |
         input_mode="${{ github.event.inputs.mode }}"
         input_path="${{ github.event.inputs.test_path }}"
-
-        # Если push/PR — задаём режим по умолчанию
         mode="${input_mode:-new_or_changes}"
         path="${input_path:-}"
 
@@ -78,12 +87,12 @@ jobs:
         modified_tests="${{ steps.collect.outputs.MODIFIED_TESTS }}"
         combined_tests="${{ steps.collect.outputs.COMBINED_TESTS }}"
 
-        echo "▶ Selected mode: $mode"
-        echo "▶ Test path: $path"
+        echo "▶ Mode: $mode"
+        echo "▶ Path: $path"
 
         case "$mode" in
           all)
-            echo "▶ Running all tests..."
+            echo "🧪 Running all tests..."
             pytest
             ;;
           path)
@@ -91,33 +100,33 @@ jobs:
               echo "❌ Error: test_path is required when mode=path"
               exit 1
             fi
-            echo "▶ Running specific test: $path"
+            echo "🧪 Running test(s) at: $path"
             pytest "$path"
             ;;
           new)
             if [ -z "$new_tests" ]; then
-              echo "⚠ No new test files found."
+              echo "⚠ No new test files found. Skipping tests."
               exit 0
             fi
-            echo "▶ Running new test files:"
+            echo "🧪 Running new tests:"
             echo "$new_tests"
             pytest $new_tests
             ;;
           changes)
             if [ -z "$modified_tests" ]; then
-              echo "⚠ No modified test files found."
+              echo "⚠ No modified test files found. Skipping tests."
               exit 0
             fi
-            echo "▶ Running modified test files:"
+            echo "🧪 Running changed tests:"
             echo "$modified_tests"
             pytest $modified_tests
             ;;
           new_or_changes)
             if [ -z "$combined_tests" ]; then
-              echo "⚠ No new or modified test files found."
+              echo "⚠ No new or modified test files found. Skipping tests."
               exit 0
             fi
-            echo "▶ Running all changed or new test files:"
+            echo "🧪 Running new and changed tests:"
             echo "$combined_tests"
             pytest $combined_tests
             ;;
@@ -126,6 +135,7 @@ jobs:
             exit 1
             ;;
         esac
+
 
 
 
