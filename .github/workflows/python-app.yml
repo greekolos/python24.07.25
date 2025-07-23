@@ -47,19 +47,19 @@ jobs:
       run: |
         echo "🔍 Checking for changed test files..."
 
-        # Получаем список изменённых тестов по сравнению с origin/master
-        CHANGED=$(git fetch origin master && git diff --name-only --diff-filter=AMR origin/master...HEAD | grep '^test/.*\.py$' || true)
+        git fetch origin master
+        CHANGED=$(git diff --name-only --diff-filter=AMR origin/master...HEAD | grep '^test/.*\.py$' || true)
 
         echo "📝 Changed test files:"
         echo "$CHANGED"
 
-        # Сохраняем в output
         echo "CHANGED_TESTS=$CHANGED" >> $GITHUB_OUTPUT
 
     - name: Run tests
+      shell: bash
       run: |
-        echo "Input path: ${{ github.event.inputs.test_path || '' }}"
-        echo "Only changed: ${{ github.event.inputs.only_changed || '' }}"
+        echo "Input path: ${{ github.event.inputs.test_path }}"
+        echo "Only changed: ${{ github.event.inputs.only_changed }}"
 
         CHANGED="${{ steps.changed-tests.outputs.CHANGED_TESTS }}"
 
@@ -88,4 +88,5 @@ jobs:
         else
           echo "⚙️ Running all tests (fallback)"
           pytest
+        fi
 
