@@ -70,11 +70,15 @@ jobs:
 
         MODIFIED=$(git diff --name-only --diff-filter=M $DIFF_BASE HEAD | grep '^test/.*\.py$' || true)
         NEW=$(git diff --name-only --diff-filter=A $DIFF_BASE HEAD | grep '^test/.*\.py$' || true)
-        COMBINED=$(echo -e "$MODIFIED\n$NEW" | sort -u | xargs)
+        COMBINED=$(echo -e "$MODIFIED\n$NEW" | sort -u)
 
-        echo "MODIFIED_TESTS=$MODIFIED" >> $GITHUB_OUTPUT
-        echo "NEW_TESTS=$NEW" >> $GITHUB_OUTPUT
-        echo "COMBINED_TESTS=$COMBINED" >> $GITHUB_OUTPUT
+        MODIFIED_TESTS=$(echo "$MODIFIED" | tr '\n' ' ' | xargs)
+        NEW_TESTS=$(echo "$NEW" | tr '\n' ' ' | xargs)
+        COMBINED_TESTS=$(echo "$COMBINED" | tr '\n' ' ' | xargs)
+
+        echo "MODIFIED_TESTS=$MODIFIED_TESTS" >> $GITHUB_OUTPUT
+        echo "NEW_TESTS=$NEW_TESTS" >> $GITHUB_OUTPUT
+        echo "COMBINED_TESTS=$COMBINED_TESTS" >> $GITHUB_OUTPUT
 
     - name: Run tests
       shell: bash
@@ -108,7 +112,7 @@ jobs:
             pytest "$path"
             ;;
           new)
-            if [ -z "$(echo $new_tests | xargs)" ]; then
+            if [ -z "$new_tests" ]; then
               echo "⚠ No new test files found. Skipping tests."
               exit 0
             fi
@@ -117,7 +121,7 @@ jobs:
             pytest $new_tests
             ;;
           changes)
-            if [ -z "$(echo $modified_tests | xargs)" ]; then
+            if [ -z "$modified_tests" ]; then
               echo "⚠ No modified test files found. Skipping tests."
               exit 0
             fi
@@ -126,7 +130,7 @@ jobs:
             pytest $modified_tests
             ;;
           new_or_changes)
-            if [ -z "$(echo $combined_tests | xargs)" ]; then
+            if [ -z "$combined_tests" ]; then
               echo "⚠ No new or modified test files found. Skipping tests."
               exit 0
             fi
@@ -139,6 +143,7 @@ jobs:
             exit 1
             ;;
         esac
+
 
 
 
